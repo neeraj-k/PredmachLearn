@@ -1,0 +1,118 @@
+# Peer Assessment 1 for Coursera Course on Practical Machine Learning
+
+
+
+## Executive Summary
+In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to quantify the manner (class) in which they did the exercise. Data for this exercise is available on  http://groupware.les.inf.puc-rio.br/har
+
+## Data Processing 
+
+### Getting Data
+
+```{r}
+urlTrain <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+if(!file.exists("pml-training.csv")){
+        download.file(urlTrain, "pml-training.csv", method = "curl")
+}
+training <- read.csv("pml-training.csv")
+
+urlTest <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+if(!file.exists("pml-testing.csv")){
+        download.file(urlTest, "pml-testing.csv", method = "curl")
+}
+testing <- read.csv("pml-testing.csv")
+```
+
+```{r}
+dim(training); dim(testing)
+```
+
+### Cleaning Data
+
+We will discard variables with high % of missing values, how it is measured, timestamp related variables and id related variables
+
+```{r}
+# Removing features that have mostly missing values
+removeMiss <- function(data){
+        words <- c("kurtosis", "var", "skewness", "stddev", "avg", "amplitude", "min", "max")
+        index <- c()
+        for(word in words){
+                index <- append(index, grep(word, names(data)))
+        }
+        ts <- data[,-index]
+        return(ts)
+}
+tr <- removeMiss(training)
+ts <- removeMiss(testing)
+# Removing features with ID information and time
+names(tr[,c(1:7)])
+```
+
+```{r}
+tr <- tr[,-c(1:7)]
+ts <- ts[,-c(1:7)]
+
+dim(tr); dim(ts)
+```
+
+## Model Build Process
+
+First we partition the training data into random subsamples such that 70% goes to a new training set and 30% goes to the cross-validation data set.
+
+```{r}
+library(caret)
+set.seed(3234)
+inTrain <- createDataPartition(tr$classe, p = 0.7, list = FALSE)
+train <- tr[inTrain,]
+test <- tr[-inTrain,]
+```
+
+Next we fit the model using random forest machhine learning procedure. We used cross validation to sub sample the data and test it over 4 cross validation sets
+
+```{r}
+set.seed(3234)
+modelFit <- train(classe ~ ., data = train,
+                  method = "rf",
+                  trControl = trainControl(method = "cv", number = 4))
+```
+
+## Error estimation with cross validation (out of sample error)
+
+Using our CV dataset, We compare the model predictions(classe) to the actual outcome. Out of sample error is reported using the confusion matrix
+
+```{r}
+library(randomForest)
+pred <- predict(modelFit$finalModel, newdata = test)
+confusionMatrix(test$classe, pred)
+```
+
+Our accuracy (out of sample error meausure) is 99.24% and we are confident of using the model results on the test dataset to predict the "classe" of the 20 test cases
+
+```{r}
+answers <- predict(modelFit$finalModel, newdata = ts)
+answers <- as.character(answers)
+answers
+```
+
+## Writing the answers to the file for project submission
+
+Finally, we write the answers to files as specified by the course instructor using the following code segment.
+
+```{r}
+pml_write_files = function(x) {
+    n = length(x)
+    for (i in 1:n) {
+        filename = paste0("problem_id_", i, ".txt")
+        write.table(x[i], file = filename, quote = FALSE, row.names = FALSE, 
+            col.names = FALSE)
+    }
+}
+
+pml_write_files(answers)
+```
+
+## Results
+All the predictions for the 20 cases should be right on submission. This shows that the cross validation model developed out of the random forest machine learning algorthm is highly accurate and predictive.
+
+
+
